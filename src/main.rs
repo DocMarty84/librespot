@@ -35,6 +35,7 @@ use std::{
 };
 use sysinfo::{ProcessesToUpdate, System};
 use thiserror::Error;
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -2007,6 +2008,8 @@ async fn main() {
         }
     }
 
+    let mut sigusr1 = signal(SignalKind::user_defined1()).expect("Failed to bind SIGUSR1");
+    let mut sigusr2 = signal(SignalKind::user_defined2()).expect("Failed to bind SIGUSR2");
     loop {
         tokio::select! {
             credentials = async {
@@ -2096,6 +2099,24 @@ async fn main() {
             },
             _ = tokio::signal::ctrl_c() => {
                 break;
+            },
+            _ = sigusr1.recv() => {
+                if let Some(spirc) = spirc.as_mut() {
+                    if let Err(e) = spirc.play() {
+                        error!("error sending play message: {}", e);
+                    }
+                } else {
+                    warn!("Spirc not running, can't play");
+                }
+            },
+            _ = sigusr2.recv() => {
+                if let Some(spirc) = spirc.as_mut() {
+                    if let Err(e) = spirc.pause() {
+                        error!("error sending pause message: {}", e);
+                    }
+                } else {
+                    warn!("Spirc not running, can't pause");
+                }
             },
             else => break,
         }
